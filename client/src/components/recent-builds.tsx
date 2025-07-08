@@ -80,7 +80,12 @@ export default function RecentBuilds() {
                   disabled={build.status !== "completed"}
                   onClick={() => {
                     if (build.downloadUrl) {
-                      window.open(build.downloadUrl, '_blank');
+                      const link = document.createElement('a');
+                      link.href = build.downloadUrl;
+                      link.download = `${build.name.replace(/[^a-z0-9]/gi, '_')}-${build.version}.apk`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
                     }
                   }}
                 >

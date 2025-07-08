@@ -26,8 +26,14 @@ export default function DownloadSection({ project }: DownloadSectionProps) {
 
   const handleDownload = () => {
     if (project.downloadUrl) {
-      // In a real implementation, this would trigger the actual download
-      window.open(project.downloadUrl, '_blank');
+      // Create a download link that triggers the file download
+      const link = document.createElement('a');
+      link.href = project.downloadUrl;
+      link.download = `${project.name.replace(/[^a-z0-9]/gi, '_')}-${project.version}.apk`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
       toast({
         title: "Download Started",
         description: "Your APK download has begun.",
