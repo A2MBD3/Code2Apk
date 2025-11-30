@@ -124,12 +124,25 @@ export class AndroidBuilder {
     let logs = "";
     
     try {
+      // Parse GitHub URL to extract repository URL and branch
+      // Handles URLs like: https://github.com/user/repo/tree/branch-name
+      let repoUrl = githubUrl;
+      let actualBranch = branch;
+      
+      const treeMatch = githubUrl.match(/^(https:\/\/github\.com\/[^\/]+\/[^\/]+)\/tree\/(.+)$/);
+      if (treeMatch) {
+        repoUrl = treeMatch[1];
+        actualBranch = treeMatch[2];
+        logs += `[INFO] Parsed GitHub URL: ${repoUrl}\n`;
+        logs += `[INFO] Detected branch from URL: ${actualBranch}\n`;
+      }
+      
       onProgress?.(5, "Cloning GitHub repository...");
-      logs += `[INFO] Cloning repository: ${githubUrl}\n`;
-      logs += `[INFO] Branch: ${branch}\n`;
+      logs += `[INFO] Cloning repository: ${repoUrl}\n`;
+      logs += `[INFO] Branch: ${actualBranch}\n`;
       
       await fs.mkdir(clonePath, { recursive: true });
-      await execAsync(`git clone --depth 1 --branch ${branch} "${githubUrl}" "${clonePath}"`);
+      await execAsync(`git clone --depth 1 --branch "${actualBranch}" "${repoUrl}" "${clonePath}"`);
       
       onProgress?.(20, "Repository cloned, analyzing project...");
       logs += "[INFO] Repository cloned successfully\n";
