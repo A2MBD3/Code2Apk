@@ -26,6 +26,8 @@ export class AndroidBuilder {
   private tempDir = path.join(process.cwd(), "temp");
   private sdkRoot = path.join(process.env.HOME || "/home/runner", "android-sdk");
   private buildToolsPath = path.join(this.sdkRoot, "build-tools", "34.0.0");
+  private platformPath = path.join(this.sdkRoot, "platforms", "android-34");
+  private androidJar = path.join(this.sdkRoot, "platforms", "android-34", "android.jar");
   private keystorePath = path.join(this.sdkRoot, "keys", "debug.keystore");
 
   constructor() {
@@ -307,11 +309,9 @@ export class AndroidBuilder {
       await fs.writeFile(manifestPath, manifestContent);
       logs += "[INFO] AndroidManifest.xml prepared\n";
 
-      onProgress?.(25, "Creating minimal Android framework...");
+      onProgress?.(25, "Using Android SDK framework...");
       
-      const androidJarPath = path.join(workDir, "android.jar");
-      await this.createMinimalAndroidJar(androidJarPath);
-      logs += "[INFO] Android framework prepared\n";
+      logs += "[INFO] Using Android SDK android.jar\n";
 
       onProgress?.(35, "Compiling resources with AAPT2...");
       
@@ -337,8 +337,8 @@ export class AndroidBuilder {
       const unsignedApk = path.join(workDir, "unsigned.apk");
       
       const linkCmd = flatFiles.length > 0
-        ? `${path.join(this.buildToolsPath, "aapt2")} link --proto-format -o "${unsignedApk}" -I "${androidJarPath}" --manifest "${manifestPath}" --min-sdk-version ${options.minSdk} --target-sdk-version ${options.targetSdk} ${flatArgs} 2>&1`
-        : `${path.join(this.buildToolsPath, "aapt2")} link --proto-format -o "${unsignedApk}" -I "${androidJarPath}" --manifest "${manifestPath}" --min-sdk-version ${options.minSdk} --target-sdk-version ${options.targetSdk} 2>&1`;
+        ? `${path.join(this.buildToolsPath, "aapt2")} link -o "${unsignedApk}" -I "${this.androidJar}" --manifest "${manifestPath}" --min-sdk-version ${options.minSdk} --target-sdk-version ${options.targetSdk} ${flatArgs} 2>&1`
+        : `${path.join(this.buildToolsPath, "aapt2")} link -o "${unsignedApk}" -I "${this.androidJar}" --manifest "${manifestPath}" --min-sdk-version ${options.minSdk} --target-sdk-version ${options.targetSdk} 2>&1`;
       
       try {
         await execAsync(linkCmd);
@@ -379,31 +379,38 @@ export class AndroidBuilder {
         logs += `[WARN] DEX addition warning: ${e.message}\n`;
       }
 
-      onProgress?.(85, "Signing APK...");
+      onProgress?.(85, "Aligning APK...");
       
-      const signedApk = path.join(workDir, "signed.apk");
+      const alignedApk = path.join(workDir, "aligned.apk");
       try {
         await execAsync(
-          `${path.join(this.buildToolsPath, "apksigner")} sign --ks "${this.keystorePath}" --ks-pass pass:android --key-pass pass:android --out "${signedApk}" "${unalignedApk}" 2>&1`
-        );
-        logs += "[INFO] APK signed successfully\n";
-      } catch (e: any) {
-        logs += `[WARN] Sign warning (using jarsigner): ${e.message}\n`;
-        await execAsync(
-          `jarsigner -keystore "${this.keystorePath}" -storepass android -keypass android -signedjar "${signedApk}" "${unalignedApk}" androiddebugkey 2>&1`
-        );
-      }
-
-      onProgress?.(95, "Aligning APK...");
-      
-      try {
-        await execAsync(
-          `${path.join(this.buildToolsPath, "zipalign")} -f 4 "${signedApk}" "${outputPath}" 2>&1`
+          `${path.join(this.buildToolsPath, "zipalign")} -f -p 4 "${unalignedApk}" "${alignedApk}" 2>&1`
         );
         logs += "[INFO] APK aligned successfully\n";
       } catch (e: any) {
         logs += `[WARN] Zipalign warning: ${e.message}\n`;
-        await fs.copyFile(signedApk, outputPath);
+        await fs.copyFile(unalignedApk, alignedApk);
+      }
+
+      onProgress?.(95, "Signing APK...");
+      
+      try {
+        await execAsync(
+          `${path.join(this.buildToolsPath, "apksigner")} sign --ks "${this.keystorePath}" --ks-pass pass:android --key-pass pass:android --v1-signing-enabled true --v2-signing-enabled true --out "${outputPath}" "${alignedApk}" 2>&1`
+        );
+        logs += "[INFO] APK signed with v1+v2 signatures\n";
+      } catch (e: any) {
+        logs += `[WARN] apksigner failed (${e.message}), using jarsigner...\n`;
+        try {
+          await execAsync(
+            `jarsigner -keystore "${this.keystorePath}" -storepass android -keypass android "${alignedApk}" androiddebugkey 2>&1`
+          );
+          await fs.copyFile(alignedApk, outputPath);
+          logs += "[INFO] APK signed with jarsigner\n";
+        } catch (je: any) {
+          logs += `[WARN] jarsigner also failed: ${je.message}\n`;
+          await fs.copyFile(alignedApk, outputPath);
+        }
       }
 
       await fs.rm(workDir, { recursive: true, force: true });
@@ -521,17 +528,13 @@ public class MainActivity extends Activity {
 }`;
     await fs.writeFile(path.join(tempDir, "src", packagePath, "MainActivity.java"), mainActivityJava);
     
-    const androidJarPath = path.join(this.tempDir, "android-stub.jar");
-    await this.createMinimalAndroidJar(androidJarPath);
-    
     const classesDir = path.join(tempDir, "classes");
     await fs.mkdir(classesDir, { recursive: true });
     
-    await execAsync(`javac -source 8 -target 8 -cp "${androidJarPath}" -d "${classesDir}" $(find "${tempDir}/src" -name "*.java") 2>&1 || true`);
+    await execAsync(`javac -source 8 -target 8 -cp "${this.androidJar}" -d "${classesDir}" $(find "${tempDir}/src" -name "*.java") 2>&1 || true`);
     await execAsync(`cd "${classesDir}" && jar cf "${jarPath}" . 2>&1`);
     
     await fs.rm(tempDir, { recursive: true, force: true });
-    await fs.rm(androidJarPath, { force: true });
   }
 
   private async createMinimalDex(dexPath: string): Promise<void> {
