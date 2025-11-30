@@ -8,6 +8,7 @@ import path from "path";
 import fs from "fs/promises";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import JSZip from "jszip";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -225,7 +226,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 </manifest>`;
         
         // Create a proper ZIP structure for APK
-        const JSZip = require('jszip');
         const zip = new JSZip();
         
         // Add Android manifest
