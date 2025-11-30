@@ -101,7 +101,32 @@ The application is designed for deployment on platforms like Replit with the fol
 - Development/production mode detection
 - Replit-specific optimizations and error handling
 
+## Android SDK Integration
+
+The application uses the Android SDK command-line tools installed at `~/android-sdk/`:
+- **Build Tools (34.0.0)**: aapt2, d8, zipalign, apksigner
+- **Platform SDK (android-34)**: android.jar for Java compilation
+- **Signing Key**: Debug keystore at `~/android-sdk/keys/debug.keystore`
+
+### APK Build Process
+1. Extract uploaded ZIP or clone GitHub repository
+2. Analyze project structure to find AndroidManifest.xml and resources
+3. Compile resources using aapt2
+4. Link APK with aapt2 using android.jar
+5. Compile Java code and create DEX using d8
+6. Align APK using zipalign
+7. Sign APK using apksigner with v1+v2+v3 signatures
+
+The resulting APK is a real, installable Android application that passes signature verification.
+
 ## Changelog
+- November 30, 2025: Fixed APK generation to create real, installable APKs
+  - Installed Android SDK build-tools 34.0.0 (aapt2, d8, zipalign, apksigner)
+  - Installed Android platform SDK android-34 with proper android.jar
+  - Created debug keystore for APK signing
+  - Updated AndroidBuilder to use real SDK tools instead of mock implementation
+  - Fixed signing process order: zipalign first, then apksigner with v1+v2 signatures
+  - APKs now pass apksigner verification and can be installed on Android devices
 - July 08, 2025: Implemented real Android compilation system
   - Added AndroidBuilder class for actual APK compilation from source code
   - Created Docker-based build environment with Android SDK and tools
