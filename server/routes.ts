@@ -244,10 +244,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         zip.file('META-INF/MANIFEST.MF', 'Manifest-Version: 1.0\nCreated-By: APK Builder\n');
         
         // Generate ZIP content
-        const zipContent = await zip.generateAsync({ type: 'buffer' });
+        const zipContent = await zip.generateAsync({ type: 'arraybuffer' });
+        const buffer = Buffer.from(zipContent);
         
-        res.setHeader('Content-Length', zipContent.length);
-        res.send(zipContent);
+        res.setHeader('Content-Length', buffer.length);
+        res.send(buffer);
       }
     } catch (error) {
       console.error("Download error:", error);
