@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Smartphone, Menu, FileText, Code, Globe } from "lucide-react";
+import { Smartphone, Menu, FileText, Code, Globe, Download, Package } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import FileUpload from "@/components/file-upload";
 import BuildConfiguration from "@/components/build-configuration";
@@ -11,9 +12,27 @@ import DownloadSection from "@/components/download-section";
 import RecentBuilds from "@/components/recent-builds";
 import type { BuildProject } from "@shared/schema";
 
+interface PrebuiltApk {
+  name: string;
+  filename: string;
+  size: number;
+  downloadUrl: string;
+  createdAt: string;
+}
+
 export default function Home() {
   const [currentProject, setCurrentProject] = useState<BuildProject | null>(null);
   const [showLogs, setShowLogs] = useState(false);
+
+  const { data: prebuiltApks } = useQuery<PrebuiltApk[]>({
+    queryKey: ['/api/prebuilt-apks'],
+  });
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,6 +58,50 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Pre-built APKs Section */}
+        {prebuiltApks && prebuiltApks.length > 0 && (
+          <div className="mb-8 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6" data-testid="prebuilt-apks-section">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                <Package className="text-white w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Ready to Download APKs</h3>
+                <p className="text-sm text-gray-600">Pre-built APK files available for immediate download</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {prebuiltApks.map((apk) => (
+                <div 
+                  key={apk.filename} 
+                  className="bg-white rounded-lg border border-green-200 p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow"
+                  data-testid={`apk-card-${apk.filename}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <Smartphone className="text-green-600 w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900">{apk.name}</h4>
+                      <p className="text-sm text-gray-500">{formatFileSize(apk.size)}</p>
+                    </div>
+                  </div>
+                  <a 
+                    href={apk.downloadUrl} 
+                    download
+                    data-testid={`download-btn-${apk.filename}`}
+                  >
+                    <Button className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                      <Download className="w-4 h-4" />
+                      Download
+                    </Button>
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Page Header */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Android APK Compiler</h2>

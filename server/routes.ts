@@ -168,6 +168,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get available pre-built APKs
+  app.get("/api/prebuilt-apks", async (req, res) => {
+    try {
+      const buildsDir = path.join(process.cwd(), 'builds');
+      const files = await fs.readdir(buildsDir);
+      
+      const apks = await Promise.all(
+        files
+          .filter(f => f.endsWith('.apk') && (f.includes('Stryker') || f.includes('stryker')))
+          .map(async (filename) => {
+            const filePath = path.join(buildsDir, filename);
+            const stats = await fs.stat(filePath);
+            return {
+              name: filename.replace('.apk', '').replace(/-/g, ' '),
+              filename,
+              size: stats.size,
+              downloadUrl: `/api/prebuilt/${filename}`,
+              createdAt: stats.mtime
+            };
+          })
+      );
+      
+      res.json(apks);
+    } catch (error) {
+      console.error("Get prebuilt APKs error:", error);
+      res.json([]);
+    }
+  });
+
+  // Download pre-built APK
+  app.get("/api/prebuilt/:filename", async (req, res) => {
+    try {
+      const filename = req.params.filename;
+      const buildsDir = path.resolve(process.cwd(), 'builds');
+      const filePath = path.resolve(buildsDir, filename);
+      
+      // Security: Prevent path traversal attacks
+      if (!filePath.startsWith(buildsDir) || !filename.endsWith('.apk') || filename.includes('..')) {
+        return res.status(403).json({ message: "Invalid file request" });
+      }
+      
+      await fs.access(filePath);
+      const stats = await fs.stat(filePath);
+      
+      // Sanitize filename for Content-Disposition header
+      const safeFilename = path.basename(filename);
+      res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Length', stats.size);
+      
+      const content = await fs.readFile(filePath);
+      res.send(content);
+    } catch (error) {
+      console.error("Download prebuilt APK error:", error);
+      res.status(404).json({ message: "APK not found" });
+    }
+  });
+
   // Download APK
   app.get("/api/download/:buildId", async (req, res) => {
     try {
