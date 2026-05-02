@@ -16,7 +16,7 @@ export default function DownloadSection({ project }: DownloadSectionProps) {
   }
 
   const formatFileSize = (bytes: number | null) => {
-    if (!bytes) return "Unknown size";
+    if (bytes === null || bytes === undefined) return "Unknown size";
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -26,14 +26,13 @@ export default function DownloadSection({ project }: DownloadSectionProps) {
 
   const handleDownload = () => {
     if (project.downloadUrl) {
-      // Create a download link that triggers the file download
       const link = document.createElement('a');
       link.href = project.downloadUrl;
       link.download = `${project.name.replace(/[^a-z0-9]/gi, '_')}-${project.version}.apk`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       toast({
         title: "Download Started",
         description: "Your APK download has begun.",
@@ -41,24 +40,24 @@ export default function DownloadSection({ project }: DownloadSectionProps) {
     }
   };
 
-  const handleQRCode = () => {
-    toast({
-      title: "QR Code",
-      description: "QR code functionality would be implemented here.",
-    });
-  };
-
   const handleShare = () => {
+    const shareUrl = window.location.origin + (project.downloadUrl || '');
     if (navigator.share && project.downloadUrl) {
       navigator.share({
         title: `${project.name} APK`,
         text: `Download ${project.name} v${project.version}`,
-        url: project.downloadUrl,
+        url: shareUrl,
+      });
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareUrl);
+      toast({
+        title: "Link Copied",
+        description: "Download link copied to clipboard.",
       });
     } else {
       toast({
         title: "Share Link",
-        description: "Share functionality would be implemented here.",
+        description: shareUrl,
       });
     }
   };
@@ -67,7 +66,7 @@ export default function DownloadSection({ project }: DownloadSectionProps) {
     <Card className="bg-white">
       <CardContent className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Download APK</h3>
-        
+
         <div className="text-center space-y-4">
           <div className="w-16 h-16 bg-secondary bg-opacity-10 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle className="text-secondary w-8 h-8" />
@@ -76,26 +75,26 @@ export default function DownloadSection({ project }: DownloadSectionProps) {
             <p className="font-medium text-gray-900">Build Completed!</p>
             <p className="text-sm text-gray-500">Your APK is ready for download</p>
           </div>
-          
+
           <div className="space-y-3">
-            <Button 
+            <Button
               onClick={handleDownload}
               className="w-full bg-secondary text-white hover:bg-green-700"
             >
               <Download className="mr-2 w-4 h-4" />
               Download APK ({formatFileSize(project.apkSize)})
             </Button>
-            
+
             <div className="flex space-x-2">
-              <Button 
+              <Button
                 variant="secondary"
                 className="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200"
-                onClick={handleQRCode}
+                onClick={() => toast({ title: "QR Code", description: "QR code feature coming soon." })}
               >
                 <QrCode className="mr-1 w-4 h-4" />
                 QR Code
               </Button>
-              <Button 
+              <Button
                 variant="secondary"
                 className="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200"
                 onClick={handleShare}
@@ -105,7 +104,7 @@ export default function DownloadSection({ project }: DownloadSectionProps) {
               </Button>
             </div>
           </div>
-          
+
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
             <p className="text-xs text-yellow-800">
               <AlertTriangle className="inline mr-1 w-4 h-4" />

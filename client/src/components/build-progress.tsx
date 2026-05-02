@@ -1,30 +1,30 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, Loader2, Circle, Info } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { BuildProject } from "@shared/schema";
 
 interface BuildProgressProps {
   project: BuildProject | null;
+  onProjectUpdated: (project: BuildProject) => void;
 }
 
-export default function BuildProgress({ project }: BuildProgressProps) {
-  const queryClient = useQueryClient();
+export default function BuildProgress({ project, onProjectUpdated }: BuildProgressProps) {
+  const prevStatusRef = useRef<string | null>(null);
 
-  // Poll for project updates when building
-  const { data: updatedProject } = useQuery({
+  const { data: updatedProject } = useQuery<BuildProject>({
     queryKey: [`/api/project/${project?.id}`],
-    enabled: !!project && project.status === "building",
+    enabled: !!project && (project.status === "building" || project.status === "uploaded"),
     refetchInterval: 2000,
   });
 
-  // Update project state when we get new data
   useEffect(() => {
-    if (updatedProject && project) {
-      queryClient.setQueryData([`/api/project/${project.id}`], updatedProject);
+    if (updatedProject && updatedProject.status !== prevStatusRef.current) {
+      prevStatusRef.current = updatedProject.status;
+      onProjectUpdated(updatedProject);
     }
-  }, [updatedProject, project, queryClient]);
+  }, [updatedProject, onProjectUpdated]);
 
   const currentProject = updatedProject || project;
 
@@ -47,14 +47,14 @@ export default function BuildProgress({ project }: BuildProgressProps) {
     <Card className="bg-white">
       <CardContent className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Build Progress</h3>
-        
+
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">Overall Progress</span>
             <span className="text-sm text-gray-500">{currentProject.progress}%</span>
           </div>
           <Progress value={currentProject.progress} className="w-full" />
-          
+
           <div className="space-y-2">
             {buildSteps.map((step, index) => (
               <div key={step.name} className="flex items-center space-x-3">
@@ -71,13 +71,20 @@ export default function BuildProgress({ project }: BuildProgressProps) {
               </div>
             ))}
           </div>
-          
+
           {currentProject.status === "building" && (
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-800">
                 <Info className="inline mr-1 w-4 h-4" />
                 Estimated time remaining: {estimatedTimeRemaining} minutes
               </p>
+            </div>
+          )}
+
+          {currentProject.status === "failed" && currentProject.errorMessage && (
+            <div className="mt-4 p-3 bg-red-50 rounded-lg">
+              <p className="text-sm text-red-800 font-medium">Build failed:</p>
+              <p className="text-xs text-red-700 mt-1">{currentProject.errorMessage}</p>
             </div>
           )}
         </div>

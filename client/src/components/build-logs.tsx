@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
@@ -10,6 +10,19 @@ interface BuildLogsProps {
 
 export default function BuildLogs({ project }: BuildLogsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isExpanded && project?.status === "building") {
+      logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [project?.buildLogs, isExpanded, project?.status]);
+
+  useEffect(() => {
+    if (project?.status === "building") {
+      setIsExpanded(true);
+    }
+  }, [project?.status]);
 
   if (!project || !project.buildLogs) {
     return null;
@@ -18,6 +31,7 @@ export default function BuildLogs({ project }: BuildLogsProps) {
   const logLines = project.buildLogs.split('\n').filter(line => line.trim());
 
   const getLogColor = (line: string) => {
+    if (line.includes('[SUCCESS]')) return 'text-green-300';
     if (line.includes('[INFO]')) return 'text-green-400';
     if (line.includes('[DEBUG]')) return 'text-blue-400';
     if (line.includes('[WARN]')) return 'text-yellow-400';
@@ -29,14 +43,17 @@ export default function BuildLogs({ project }: BuildLogsProps) {
     <Card className="bg-white">
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Build Logs</h3>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Build Logs
+            <span className="ml-2 text-xs font-normal text-gray-400">({logLines.length} lines)</span>
+          </h3>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsExpanded(!isExpanded)}
             className="text-gray-500 hover:text-gray-700"
           >
-            <ChevronDown 
+            <ChevronDown
               className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
             />
           </Button>
@@ -51,6 +68,7 @@ export default function BuildLogs({ project }: BuildLogsProps) {
                   {line}
                 </div>
               ))}
+              <div ref={logsEndRef} />
             </div>
           </div>
         </CardContent>

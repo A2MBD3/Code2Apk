@@ -129,8 +129,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         buildLogs: project.buildLogs + "[INFO] Starting build process...\n[INFO] Build configuration applied\n[DEBUG] Resolving dependencies...\n",
       });
 
-      // Start real build process
-      realBuildProcess(projectId);
+      // Start real build process (fire and forget with proper error capture)
+      realBuildProcess(projectId).catch((err) => {
+        console.error(`Unhandled build error for project ${projectId}:`, err);
+      });
 
       res.json(updatedProject);
     } catch (error) {

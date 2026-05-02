@@ -113,7 +113,7 @@ export default function Home() {
           <div className="lg:col-span-2 space-y-6">
             <FileUpload onProjectUploaded={setCurrentProject} />
             <BuildConfiguration project={currentProject} onProjectUpdated={setCurrentProject} />
-            <BuildProgress project={currentProject} />
+            <BuildProgress project={currentProject} onProjectUpdated={setCurrentProject} />
             <BuildLogs project={currentProject} />
           </div>
 

@@ -8,7 +8,7 @@ import { buildConfigSchema, type BuildConfig, type BuildProject } from "@shared/
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Play } from "lucide-react";
+import { Play, RotateCcw } from "lucide-react";
 
 interface BuildConfigurationProps {
   project: BuildProject | null;
@@ -32,7 +32,6 @@ export default function BuildConfiguration({ project, onProjectUpdated }: BuildC
   const buildMutation = useMutation({
     mutationFn: async (config: BuildConfig) => {
       if (!project) throw new Error("No project selected");
-      
       const response = await apiRequest('POST', `/api/build/${project.id}`, config);
       return response.json();
     },
@@ -57,11 +56,24 @@ export default function BuildConfiguration({ project, onProjectUpdated }: BuildC
     buildMutation.mutate(data);
   };
 
+  const isDisabled =
+    !project ||
+    project.status === "building" ||
+    project.status === "completed" ||
+    buildMutation.isPending;
+
+  const getButtonLabel = () => {
+    if (buildMutation.isPending) return "Starting Build...";
+    if (project?.status === "building") return "Building...";
+    if (project?.status === "completed") return "Build Complete";
+    return "Start Build";
+  };
+
   return (
     <Card className="bg-white">
       <CardContent className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Build Configuration</h3>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -85,7 +97,7 @@ export default function BuildConfiguration({ project, onProjectUpdated }: BuildC
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="targetSdk"
@@ -99,6 +111,7 @@ export default function BuildConfiguration({ project, onProjectUpdated }: BuildC
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="34">API 34 (Android 14)</SelectItem>
                         <SelectItem value="33">API 33 (Android 13)</SelectItem>
                         <SelectItem value="32">API 32 (Android 12L)</SelectItem>
                         <SelectItem value="31">API 31 (Android 12)</SelectItem>
@@ -108,7 +121,7 @@ export default function BuildConfiguration({ project, onProjectUpdated }: BuildC
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="minSdk"
@@ -125,12 +138,13 @@ export default function BuildConfiguration({ project, onProjectUpdated }: BuildC
                         <SelectItem value="21">API 21 (Android 5.0)</SelectItem>
                         <SelectItem value="23">API 23 (Android 6.0)</SelectItem>
                         <SelectItem value="26">API 26 (Android 8.0)</SelectItem>
+                        <SelectItem value="28">API 28 (Android 9.0)</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="architecture"
@@ -153,15 +167,26 @@ export default function BuildConfiguration({ project, onProjectUpdated }: BuildC
                 )}
               />
             </div>
-            
-            <div className="flex justify-end">
-              <Button 
+
+            <div className="flex justify-end gap-2">
+              {project?.status === "completed" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onProjectUpdated({ ...project, status: "uploaded" })}
+                  className="gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  New Build
+                </Button>
+              )}
+              <Button
                 type="submit"
-                disabled={!project || project.status === "building" || buildMutation.isPending}
-                className="bg-secondary text-white hover:bg-green-700"
+                disabled={isDisabled}
+                className="bg-secondary text-white hover:bg-green-700 disabled:opacity-60"
               >
                 <Play className="mr-2 w-4 h-4" />
-                {buildMutation.isPending ? "Starting Build..." : "Start Build"}
+                {getButtonLabel()}
               </Button>
             </div>
           </form>

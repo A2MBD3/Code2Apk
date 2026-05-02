@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { BuildProject, GitHubSource } from "@shared/schema";
 
@@ -25,15 +25,16 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
     version: "1.0.0",
   });
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('projectName', file.name.replace('.zip', ''));
+      formData.append('projectName', file.name.replace(/\.zip$/i, ''));
       formData.append('packageName', 'com.example.app');
       formData.append('version', '1.0.0');
-      
+
       const response = await apiRequest('POST', '/api/upload', formData);
       return response.json();
     },
@@ -44,6 +45,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
       });
       onProjectUploaded(project);
       setSelectedFile(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/builds/recent'] });
     },
     onError: (error: Error) => {
       toast({
@@ -72,6 +74,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
         packageName: "com.example.app",
         version: "1.0.0",
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/builds/recent'] });
     },
     onError: (error: Error) => {
       toast({
@@ -95,10 +98,10 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
-    const zipFile = files.find(file => file.name.endsWith('.zip'));
-    
+    const zipFile = files.find(file => file.name.toLowerCase().endsWith('.zip'));
+
     if (zipFile) {
       setSelectedFile(zipFile);
     } else {
@@ -115,6 +118,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
     if (file) {
       setSelectedFile(file);
     }
+    e.target.value = '';
   };
 
   const handleUpload = () => {
@@ -135,20 +139,29 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
     githubMutation.mutate(githubData);
   };
 
-  const extractRepoName = (url: string) => {
+  const extractFromGithubUrl = (url: string): { repoName: string; branch: string } => {
     try {
-      const match = url.match(/github\.com\/[^\/]+\/([^\/]+)/);
-      return match ? match[1].replace('.git', '') : '';
+      const treeMatch = url.match(/github\.com\/[^/]+\/([^/]+)\/tree\/(.+)/);
+      if (treeMatch) {
+        return { repoName: treeMatch[1].replace('.git', ''), branch: treeMatch[2] };
+      }
+      const repoMatch = url.match(/github\.com\/[^/]+\/([^/]+)/);
+      if (repoMatch) {
+        return { repoName: repoMatch[1].replace('.git', ''), branch: 'main' };
+      }
     } catch {
-      return '';
+      // ignore
     }
+    return { repoName: '', branch: 'main' };
   };
 
   const handleGithubUrlChange = (url: string) => {
+    const { repoName, branch } = extractFromGithubUrl(url);
     setGithubData(prev => ({
       ...prev,
       githubUrl: url,
-      projectName: prev.projectName || extractRepoName(url)
+      projectName: prev.projectName || repoName,
+      githubBranch: repoName ? branch : prev.githubBranch,
     }));
   };
 
@@ -156,7 +169,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
     <Card className="bg-white">
       <CardContent className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload Source Code</h3>
-        
+
         <Tabs defaultValue="file" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="file" className="flex items-center gap-2">
@@ -168,7 +181,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
               GitHub Repository
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="file" className="space-y-4">
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
@@ -177,7 +190,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              onClick={() => document.getElementById('file-input')?.click()}
+              onClick={() => !selectedFile && document.getElementById('file-input')?.click()}
             >
               <div className="space-y-4">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
@@ -196,20 +209,38 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
                     </>
                   )}
                 </div>
-                <div className="flex justify-center">
+                <div className="flex justify-center gap-2">
                   {selectedFile ? (
-                    <Button 
+                    <>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpload();
+                        }}
+                        disabled={uploadMutation.isPending}
+                        className="bg-secondary text-white hover:bg-green-700"
+                      >
+                        {uploadMutation.isPending ? "Uploading..." : "Upload Project"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedFile(null);
+                        }}
+                        disabled={uploadMutation.isPending}
+                      >
+                        Remove
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      className="bg-primary text-white hover:bg-blue-700"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleUpload();
+                        document.getElementById('file-input')?.click();
                       }}
-                      disabled={uploadMutation.isPending}
-                      className="bg-secondary text-white hover:bg-green-700"
                     >
-                      {uploadMutation.isPending ? "Uploading..." : "Upload Project"}
-                    </Button>
-                  ) : (
-                    <Button className="bg-primary text-white hover:bg-blue-700">
                       <FolderOpen className="mr-2 w-4 h-4" />
                       Choose File
                     </Button>
@@ -217,7 +248,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
                 </div>
               </div>
             </div>
-            
+
             <input
               id="file-input"
               type="file"
@@ -225,13 +256,13 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
               onChange={handleFileSelect}
               className="hidden"
             />
-            
-            <div className="text-sm text-gray-500">
+
+            <div className="text-sm text-gray-500 space-y-1">
               <p><Info className="inline mr-1 w-4 h-4" /> Supported formats: ZIP files up to 100MB</p>
               <p><CheckCircle className="inline mr-1 w-4 h-4" /> Required files: AndroidManifest.xml, build.gradle</p>
             </div>
           </TabsContent>
-          
+
           <TabsContent value="github" className="space-y-4">
             <div className="space-y-4">
               <div>
@@ -241,13 +272,16 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
                 <Input
                   id="github-url"
                   type="url"
-                  placeholder="https://github.com/username/repository"
+                  placeholder="https://github.com/username/repository or .../tree/branch"
                   value={githubData.githubUrl}
                   onChange={(e) => handleGithubUrlChange(e.target.value)}
                   className="mt-1"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  Supports URLs with /tree/branch — branch will be auto-detected
+                </p>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="branch" className="text-sm font-medium text-gray-700">
@@ -261,7 +295,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
                     className="mt-1"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="project-name" className="text-sm font-medium text-gray-700">
                     Project Name
@@ -275,7 +309,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="package-name" className="text-sm font-medium text-gray-700">
@@ -289,7 +323,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
                     className="mt-1"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="version" className="text-sm font-medium text-gray-700">
                     Version
@@ -303,8 +337,8 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
                   />
                 </div>
               </div>
-              
-              <Button 
+
+              <Button
                 onClick={handleGithubSubmit}
                 disabled={githubMutation.isPending || !githubData.githubUrl || !githubData.projectName}
                 className="w-full bg-secondary text-white hover:bg-green-700"
@@ -313,7 +347,7 @@ export default function FileUpload({ onProjectUploaded }: FileUploadProps) {
                 {githubMutation.isPending ? "Processing Repository..." : "Import from GitHub"}
               </Button>
             </div>
-            
+
             <div className="text-sm text-gray-500 space-y-1">
               <p><Info className="inline mr-1 w-4 h-4" /> Public repositories only</p>
               <p><CheckCircle className="inline mr-1 w-4 h-4" /> Repository must contain AndroidManifest.xml and build.gradle</p>
